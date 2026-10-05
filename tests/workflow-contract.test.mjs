@@ -52,7 +52,7 @@ test("pull_request comparison can execute the contribution but cannot write", ()
     "permissions:\n  contents: read",
     "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
     "persist-credentials: false",
-    "run: node scripts/report-pull-request-context.mjs",
+    "run: node scripts/check-ticket-total.mjs",
   ]) {
     assert.ok(
       pullRequestWorkflow.includes(required),

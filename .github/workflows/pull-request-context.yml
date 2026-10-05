@@ -1,4 +1,4 @@
-name: "01 - pull_request: contribution context"
+name: "01 - Test the contributor's code"
 
 on:
   pull_request:
@@ -21,5 +21,5 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Report the untrusted contribution context
-        run: node scripts/report-pull-request-context.mjs
+      - name: Test the proposed ticket price calculation
+        run: node scripts/check-ticket-total.mjs

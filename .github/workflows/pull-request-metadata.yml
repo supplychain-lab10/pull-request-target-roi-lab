@@ -1,4 +1,4 @@
-name: "02 - pull_request_target: trusted metadata automation"
+name: "02 - Label and comment using trusted code"
 
 on:
   pull_request_target:

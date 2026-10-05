@@ -1,0 +1,4 @@
+export function ticketTotal(price, quantity) {
+  // The contribution accidentally adds instead of multiplying.
+  return price + quantity;
+}

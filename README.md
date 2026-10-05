@@ -1,165 +1,88 @@
-# `pull_request` vs. `pull_request_target` live ROI lab
+# Test the code. Triage the PR.
 
-This conference lab triggers both GitHub Actions events from every pull
-request, whether it comes from a repository branch or an external fork. Every
-PR author gets two clearly named checks plus a comment that compares the trust
-models side by side:
+**One contribution, two useful jobs, different trust boundaries.**
 
-- `pull_request` safely builds or tests the proposed revision with a read-only
-  token and no secrets.
-- `pull_request_target` runs trusted default-branch automation that can label
-  and comment on the pull request.
+The application sells tickets. Three tickets at $20 each should cost $60. A
+contributor accidentally replaces multiplication with addition, producing $23.
 
-Opening an ordinary PR is enough to see the comparison. For the sharpest live
-demo, the participant also changes a visible source marker. The `pull_request`
-summary then shows the proposed value, while the `pull_request_target` comment
-shows `BASE_DEFAULT_BRANCH_VERSION` and performs the metadata write.
-
-## The maintainer problem
-
-A normal fork-based `pull_request` workflow is intentionally untrusted. GitHub
-normally gives it a read-only `GITHUB_TOKEN`, withholds secrets, and may require
-approval before consuming runner capacity. Those controls are appropriate for
-building and testing contributor code, but the read-only token cannot reliably
-label or comment on the base repository's pull request.
-
-`pull_request_target` changes the trust model: the workflow and a default
-checkout come from the base repository's default branch. Trusted automation can
-therefore receive narrowly scoped write access and act on the pull request as
-metadata.
-
-| Difference | `pull_request` from a fork | `pull_request_target` |
+| Job | What the audience sees | Why it exists |
 | --- | --- | --- |
-| Security context | Untrusted contribution context | Privileged base-repository context |
-| Workflow and default checkout | Pull request merge revision (`refs/pull/<number>/merge`) | Base repository's default branch |
-| `GITHUB_SHA` | Pull request merge commit | Latest commit on the base default branch |
-| Fork `GITHUB_TOKEN` | Normally downgraded to read-only even if write access is requested | Uses the permissions explicitly granted by the trusted base workflow |
-| Repository secrets | Withheld from fork runs | Available if the workflow references them; this lab uses none |
-| Maintainer approval | May wait for approval before contributor code runs | Normally runs as trusted base automation without the standard fork-code approval |
-| Correct purpose | Build, lint, or test the proposed contribution | Label, comment, assign, or perform other metadata/API automation |
-| Execute contributor code? | Yes, with a read-only token and no secrets | **No**—treat PR content only as untrusted data |
-| Write labels or comments? | Normally unavailable because fork-token writes are downgraded | Yes, with narrow `issues: write` and `pull-requests: write` permissions |
-| Primary safety benefit | Proposed code receives only the authority needed for CI | Trusted automation can reduce maintainer toil on every PR |
-| Main failure mode | Granting fork code more authority than it needs | Checking out or executing the PR head creates a privileged "pwn request" |
+| **01 — Test the contributor's code** | A red check: $60 expected, $23 returned | Catch a broken contribution before merging |
+| **02 — Label and comment using trusted code** | Labels and a short “The bot handled the paperwork” comment | Save the maintainer from manually classifying and responding to every PR |
 
-That is the ROI: less repetitive maintainer work, immediate contributor
-feedback, and consistent policy application without operating a separate bot
-service. It is not a safe way to run fork code with secrets.
+**The takeaway:** testing needs the contributor's code; triage needs the
+repository's permission. Those jobs do not need to run together.
 
-## What every PR author sees
+## Five-minute conference demo
 
-Opening, updating, or reopening any pull request starts two workflows. The
-`pull_request_target` workflow also posts the comparison table directly on the
-PR, so the lesson does not depend on the author knowing where to find an
-Actions log.
+1. Show the base function in `src/ticket-total.mjs`: `return price * quantity`.
+2. Ask: “What should three $20 tickets cost?”
+3. Use the conference PR UI as arnabroy24 to open a PR into the public
+   supplychain-lab10 repository. Its payload changes the function to
+   `return price + quantity` and adds a short docs explanation. For manual PR
+   creation, copy `examples/broken-ticket-total.mjs.txt` into the source file.
+4. Stay on the PR conversation and show the bot's labels and short comment.
+   It has handled the maintainer's paperwork without running the changed code.
+5. If GitHub holds workflow 01, inspect the diff as the lab maintainer and approve
+   the workflow run. Approval starts the check; it does not merge the PR.
+6. Open workflow 01's job summary: **$60 expected, $23 returned**. The red check is
+   the intended success of this demo: CI caught the contribution's bug.
+7. Return to the bot comment and contrast the two useful jobs. Do not merge the
+   deliberately broken PR; close it after the demonstration.
 
-### 01 — `pull_request`: contribution context
+The bot's comment does not claim that CI has run or passed. GitHub may require
+approval or delay either workflow, so inspect actual check status.
 
-`.github/workflows/pull-request-context.yml`:
+## The two workflows
 
-1. may wait for maintainer approval when the PR comes from a public fork;
-2. checks out the pull request merge revision;
-3. executes `scripts/report-pull-request-context.mjs` from that revision;
-4. prints the fork-controlled source marker into the job log and summary;
-5. has only `contents: read` and receives no lab secrets.
+`pull-request-context.yml` uses **pull_request**, checks out the proposed merge
+revision and runs `scripts/check-ticket-total.mjs`. The checker imports the
+proposed `src/ticket-total.mjs`, tests three examples, writes the job summary and
+exits nonzero for an incorrect result. The workflow requests only
+`contents: read`, does not persist checkout credentials and passes no secrets.
 
-This is where builds and tests belong.
+`pull-request-metadata.yml` uses **pull_request_target**, checks out trusted base
+default-branch automation and executes `.github/scripts/triage.mjs`. It gets
+changed filenames from the GitHub API, applies base-defined labels and posts a
+comment. It requests `contents: read`, `issues: write` and `pull-requests: write`.
+It does not check out, open or run the contributor's application files.
 
-### 02 — `pull_request_target`: trusted metadata automation
-
-`.github/workflows/pull-request-metadata.yml`:
-
-1. runs and checks out trusted code from the base default branch;
-2. prints the base source marker into its log and PR comment;
-3. requests filenames from the Pull Requests API;
-4. evaluates `.github/triage-policy.json` as trusted policy;
-5. creates/applies labels and posts a side-by-side explanation using
-   `issues: write` and `pull-requests: write`.
-
-All PR-derived values remain JavaScript strings or JSON request values. None is
-inserted into generated shell source.
+The source marker remains as supporting technical evidence inside the comment's
+expandable section. Different marker strings are no longer the main teaching
+device. The old context reporter remains available for technical exploration
+but is not used by the conference workflow.
 
 ## Run locally
 
-Requirements: Node.js 20 or newer. There are no dependencies to install.
+Node.js 20 or newer; no dependencies to install.
 
 ```bash
+npm run demo:test
 npm run preview
-npm run roi
 npm test
 ```
 
-Use project-specific ROI inputs:
+The base function should pass. Offline tests also execute the supplied broken
+fixture and confirm the failure and audience-facing summary. Another test runs
+trusted triage against a mock GitHub API and proves it labels/comments without
+executing an application sentinel.
 
-```bash
-npm run roi -- --prs 500 --minutes 3 --automation 0.75 --hourly-cost 90
-```
+The optional `npm run roi` calculator remains available for maintainer time
+savings; its illustrative numbers are not part of the live proof.
 
-The calculator reports time returned to maintainers and an illustrative labor
-value. It intentionally excludes harder-to-price benefits such as faster first
-response and contributor retention.
+## Publish the revised lab
 
-## Publish and demonstrate
+Publish this revision to the base repository's default branch before creating
+the new demo PR. The conference UI checks for `src/ticket-total.mjs` and
+`scripts/check-ticket-total.mjs` and stops if the published lab is still the old
+marker-only version. Existing participant forks are synced before creating the
+new demo branch.
 
-1. Create a dedicated public GitHub repository from this directory.
-2. Keep Actions enabled and default workflow permissions restricted.
-3. Do not add repository or environment secrets.
-4. Open a PR from a repository branch to confirm that every PR gets both checks
-   and the comparison comment.
-5. For the conference trust-boundary demo, use a separate account to fork the
-   lab. In the fork, replace the content of `demo/source-marker.txt` with:
+Keep this a dedicated lab repository with Actions enabled, restricted default
+workflow permissions and no configured repository or environment secrets. The
+privileged workflow stays on trusted automation. The unsafe checkout example is
+under `examples/` with a `.txt` extension, outside active workflows.
 
-   ```text
-   FORK_PULL_REQUEST_VERSION
-   ```
-
-6. Also change a file under `docs/`, `src/`, `tests/`, or `.github/` so the
-   metadata workflow has an area to classify.
-7. Commit and open a pull request to the base repository.
-8. Observe that workflow 02 labels/comments while showing the base marker.
-9. If workflow 01 is awaiting approval, review the fork changes and select
-   **Approve workflows to run**.
-10. Open workflow 01's job summary and compare its fork marker with workflow
-    02's base marker.
-
-The explicit `issues: write` and `pull-requests: write` permissions can be
-blocked by stricter organization policy. If so, use a dedicated personal
-repository or obtain approval for those metadata permissions; do not send write
-tokens to ordinary fork workflows.
-
-See [docs/FACILITATOR.md](docs/FACILITATOR.md) for the presentation script.
-
-## Safety boundary
-
-The `pull_request` workflow intentionally executes the proposed revision, but
-the workflow explicitly grants only `contents: read`, passes no secrets, does
-not persist its checkout credential, and has no metadata-write permission.
-
-The `pull_request_target` workflow contains no PR-head `repository:` or `ref:`,
-no `allow-unsafe-pr-checkout`, no dynamic `uses:`, and no execution of
-contributor content. The unsafe comparison is stored with a `.txt` suffix under
-`examples/` so GitHub cannot load it as a workflow.
-
-If the task changes from "inspect metadata" to "build or test the proposed
-change," use `pull_request` with a read-only token and no secrets. Never point
-this privileged workflow at `pull_request.head.sha`.
-
-## Repository map
-
-- `.github/workflows/pull-request-context.yml` — enabled read-only contribution workflow.
-- `.github/workflows/pull-request-metadata.yml` — enabled trusted metadata workflow.
-- `.github/scripts/triage.mjs` — trusted API client executed from the default branch.
-- `.github/triage-policy.json` — trusted labeling policy.
-- `demo/source-marker.txt` — visible proof of which revision was checked out.
-- `scripts/report-pull-request-context.mjs` — safe contribution-context reporter.
-- `examples/unsafe-head-checkout.yml.txt` — the pwn-request boundary, disabled.
-- `scripts/calculate-roi.mjs` — project-specific time/value calculator.
-- `tests/` — offline policy and ROI tests.
-
-## Primary references
-
-- GitHub: <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request>
-- GitHub: <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target>
-- GitHub: <https://docs.github.com/en/actions/how-tos/manage-workflow-runs/approve-runs-from-forks>
-- GitHub: <https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target>
-- GitHub: <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#changing-the-permissions-in-a-forked-repository>
+See [the facilitator guide](docs/FACILITATOR.md). GitHub documents
+[fork approvals](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/approve-runs-from-forks)
+and [pull_request_target security](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target).

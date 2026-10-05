@@ -34,9 +34,10 @@ test("comment records the trust boundary", () => {
     sourceMarker: "BASE_DEFAULT_BRANCH_VERSION",
     isFork: true,
   });
-  assert.match(comment, /This PR triggered both workflow trust models/);
-  assert.match(comment, /\| Contributor code executed \| \*\*yes\*\* \| \*\*no\*\* \|/);
-  assert.match(comment, /This comment is proof/);
+  assert.match(comment, /The bot handled the paperwork/);
+  assert.match(comment, /did not open or execute the changed source files/);
+  assert.match(comment, /It does not claim that CI has completed or passed/);
+  assert.match(comment, /three \$20 tickets cost \$60/);
   assert.match(comment, /external fork/);
   assert.match(comment, /@octocat/);
   assert.match(comment, /BASE_DEFAULT_BRANCH_VERSION/);
